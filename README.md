@@ -1,105 +1,202 @@
-# Zenndi infra
+# Zenndi Infra
 
 ## 📌 Responsabilidade
 
-Este repositório orquestra e disponibiliza a infraestrutura de desenvolvimento e operações local para o projeto **Zenndi**.
+O **zenndi-infra** é a **base operacional local** do ecossistema Zenndi.
 
-O repositório fornece e mantém: bancos de dados compartilhados (Postgres), cache (Redis), broker de mensagens (RabbitMQ), armazenamento S3 compatível (MinIO), API Gateway (Nginx), observability (Prometheus, Grafana, OpenTelemetry) e utilitários de operações (bastion, scripts de backup). Não contém a lógica de negócio dos serviços (ex.: `zenndi-core`, `zenndi-auth`), que devem ser implantados separadamente.
+Este repositório é responsável por **orquestrar, padronizar e disponibilizar** toda a infraestrutura necessária para desenvolvimento e operações locais, servindo como **fonte de verdade do ambiente de desenvolvimento**.
+
+Ele **NÃO** contém lógica de negócio. Serviços como `zenndi-auth`, `zenndi-core`, `zenndi-injestion` etc. são executados separadamente e **dependem** desta infra.
+
+---
 
 ## 🧠 Domínio
 
-- Bounded Context: **Infra / Plataforma local de desenvolvimento e ops**
-- Linguagem ubíqua: network `zenndi-network`, serviços compartilhados, backup, bastion, observability
-- Fonte de verdade para: arquivos `docker-compose.yml` em `base/`, `edge/`, `observability/`, `ops/` e variáveis em `.env`
+- **Bounded Context:** Infraestrutura / Plataforma
+- **Linguagem ubíqua:**
+  - infra local
+  - serviços compartilhados
+  - bastion
+  - observability
+  - backups
+- **Fonte de verdade para:**
+  - Docker Compose base
+  - Convenções de rede (`zenndi-network`)
+  - Portas, volumes, healthchecks
+  - Variáveis de ambiente de infra
 
-## 📤 Eventos Publicados
+---
 
-- Notificações de operação (ex.: backup concluído) enviadas opcionalmente via **Telegram** (via `ops/manage.py`).
-- Artefatos (backups) publicados no **MinIO** (S3 API) — observável por outros sistemas.
+## 📋 Requisitos
 
-> Observação: infra não é responsável por publicar eventos de domínio — os serviços (cada aplicação) usam o **RabbitMQ** para mensagens de domínio.
+- Docker 20.10+
+- Docker Compose (plugin ou binário)
+- GNU Make
+- Python 3.10+ (somente para utilitários em `ops/`)
+- Rede Docker externa: `zenndi-network`
 
-## 📥 Eventos Consumidos
+---
 
-- Infra não consome eventos de domínio como responsabilidade principal. Observability (Prometheus) "consome" (coleta) métricas expostas por serviços (`/metrics`).
+## 🛠️ Instalação
 
-## 🔗 Dependências
+### Desenvolvimento Local
 
-- Docker e Docker Compose (ou `docker compose` moderno)
-- Rede Docker externa: `zenndi-network` (criar com `docker network create zenndi-network`)
-- Arquivo `.env` com variáveis sensíveis:
-  - `POSTGRES_PASSWORD`, `POSTGRES_USER` (opcional), `POSTGRES_MULTIPLE_DATABASES`
-  - `REDIS_PASSWORD`
-  - `RABBITMQ_PASSWORD`
-  - `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_ENDPOINT` (opcional)
-  - `GRAFANA_ADMIN_PASSWORD`
-  - `TELEGRAM_TOKEN`, `CHAT_ID` (opcional para notificações)
-- Python para utilitários em `ops/` com dependências: `rich`, `questionary`, `boto3`, `requests`, `python-dotenv`
+1. Criar a rede Docker externa (obrigatório):
 
-Portas e escopo de acesso (observação importante):
+```bash
+docker network create zenndi-network
+```
 
-- A maioria dos serviços está vinculada a `127.0.0.1` (acesso local / via SSH Túnel / Bastion).
-- `nginx` (API Gateway) expõe `80:80` por padrão (entrada pública local) e `bastion` expõe `2222`.
+1. Criar o arquivo de variáveis de ambiente:
+
+```bash
+cp .env.example .env
+```
+
+1. Subir os stacks conforme necessidade:
+
+```bash
+docker compose -f base/docker-compose.yml up -d
+```
+
+Stacks opcionais:
+
+```bash
+docker compose -f edge/docker-compose.yml up -d
+docker compose -f observability/docker-compose.yml up -d
+docker compose -f ops/docker-compose.yml up -d
+```
+
+---
+
+## 📝 Configuração
+
+As principais variáveis são definidas via `.env`.
+
+### Bancos e Mensageria
+
+- `POSTGRES_PASSWORD`
+- `POSTGRES_MULTIPLE_DATABASES`
+- `REDIS_PASSWORD`
+- `RABBITMQ_PASSWORD`
+
+### Armazenamento (MinIO)
+
+- `MINIO_ROOT_USER`
+- `MINIO_ROOT_PASSWORD`
+- `MINIO_BACKUP_BUCKET`
+
+### Observability
+
+- `GRAFANA_ADMIN_PASSWORD`
+
+### Notificações (opcional)
+
+- `TELEGRAM_TOKEN`
+- `CHAT_ID`
+
+---
+
+## 🔌 Uso da Infra
+
+Serviços Zenndi devem:
+
+- Usar a rede `zenndi-network`
+- Expor `/health` para liveness
+- Expor `/metrics` (Prometheus)
+- Não subir dependências duplicadas (Postgres, Redis, etc)
+
+---
+
+## ❤️ Health Check
+
+Serviços críticos possuem `healthcheck` no Docker Compose.
+
+Exemplo padrão esperado:
+
+- `GET /health` → `200 OK`
+
+---
+
+## 📊 Monitoramento
+
+- **Prometheus:** coleta métricas dos serviços
+- **Grafana:** dashboards de métricas
+- **OpenTelemetry:** pronto para traces distribuídos
+
+UIs locais:
+
+- Prometheus: <http://127.0.0.1:9090>
+- Grafana: <http://127.0.0.1:3000>
+- MinIO Console: <http://127.0.0.1:9001>
+
+---
+
+## 🧪 Testes
+
+Este repositório não possui testes automatizados.
+
+Validação ocorre via:
+
+- `docker compose ps`
+- `docker inspect --format '{{.State.Health.Status}}'`
+- Acesso às UIs locais
+
+---
+
+## 🚀 Produção
+
+⚠️ **Este repositório NÃO é usado diretamente em produção.**
+
+Produção Zenndi utiliza:
+
+- VPS dedicada
+- Cloudflare (DNS, SSL, proxy)
+- Infra provisionada manualmente ou via automação dedicada
+
+Este repositório representa **apenas o ambiente local e operacional**.
+
+---
+
+## 📦 Estrutura de Pastas
+
+```text
+base/             # Postgres, Redis, RabbitMQ, MinIO
+edge/             # Nginx (API Gateway)
+observability/    # Prometheus, Grafana, Otel
+ops/              # Bastion, backups, scripts operacionais
+templates/        # Templates e docs auxiliares
+```
+
+---
 
 ## ⚠️ Regras Importantes
 
-- **Rede externa obrigatória**: `zenndi-network` deve existir. Não inicie sem ela.
-- **Não exponha** serviços críticos (Postgres, Redis, RabbitMQ, MinIO) publicamente em produção — use apenas `127.0.0.1` ou túnel via bastion.
-- **Manter segredos fora do VCS**: use `.env` e não commite credenciais.
-- **Persistência**: os volumes declarados preservam dados entre reinícios (Postgres, Redis, RabbitMQ, MinIO, Grafana, Prometheus).
-- **Healthchecks** estão configurados para serviços essenciais; mantenha-os ativos para orquestração segura.
-- **Nginx configs** e `conf.d/` no `edge/` estão esperando configurações específicas de roteamento; crie os arquivos conforme sua arquitetura de APIs.
-
-## 📦 Estrutura Interna
-
-- `base/` — Serviços de infra compartilhada: `postgres`, `redis`, `rabbitmq`, `minio` + script de init (`init-multiple-dbs.sh`)
-- `edge/` — API Gateway (`nginx`) e suas configs
-- `observability/` — `prometheus`, `grafana`, `otel` (collector)
-- `ops/` — `manage.py` (rotinas de backup e uploads para MinIO), `bastion/`, scripts e backups
-- `templates/` — modelos e documentação
-
-## 🔄 Fluxos Relevantes
-
-1. Bootstrapping da infra
-   - Crie a rede: `docker network create zenndi-network`
-   - Configure `.env` com senhas e variáveis necessárias
-   - Suba os stacks (exemplos):
-     - `docker compose -f base/docker-compose.yml up -d`
-     - `docker compose -f edge/docker-compose.yml up -d`
-     - `docker compose -f observability/docker-compose.yml up -d`
-     - `docker compose -f ops/docker-compose.yml up -d`
-
-2. Inicialização de bancos
-   - `POSTGRES_MULTIPLE_DATABASES` (ex: `zenndi_core,zenndi_auth,zenndi_scanner`) é usado por `init-multiple-dbs.sh` para criar DBs automaticamente no primeiro start do container Postgres.
-
-3. Fluxo de Backup (Operações)
-   - Executar: `python ops/manage.py` e escolher **Backup Postgres agora**
-   - O script gera um dump, comprime e faz upload para o **MinIO** (bucket configurável via `MINIO_BACKUP_BUCKET`).
-   - Notificações via Telegram são opcionais e configuráveis com `TELEGRAM_TOKEN` e `CHAT_ID`.
-
-4. Observabilidade
-   - Prometheus scrapes serviços configurados em `observability/prometheus/prometheus.yml` (espera que cada serviço exponha `/metrics` em `:8000`).
-   - Grafana consulta Prometheus; Otel Collector (configurável) encaminha traces.
-
-5. Acesso a UIs locais
-   - MinIO Console: `http://127.0.0.1:9001` (ou via SSH Tunnel / Bastion)
-   - Prometheus: `http://127.0.0.1:9090`
-   - Grafana: `http://127.0.0.1:3000`
-   - Bastion SSH (testes locais): `ssh -p 2222 dev@localhost`
+- `zenndi-network` é obrigatória
+- Não expor serviços críticos publicamente
+- Segredos nunca devem ir para o VCS
+- Volumes garantem persistência local
+- Infra local é **fonte de verdade de desenvolvimento**
 
 ---
 
-💡 Dicas rápidas
+## ✅ Checklist
 
-- Verifique se `nginx` possui configurações em `edge/nginx/` antes de usá-lo como gateway.
-- Atualize senhas por padrão em ambientes de produção.
-- Expanda `prometheus.yml` com seus serviços quando adicionar novas APIs.
+- [ ] Rede Docker criada
+- [ ] `.env` configurado
+- [ ] Stacks necessários em execução
+- [ ] Healthchecks OK
+- [ ] Grafana acessível
+- [ ] Backups testados
 
 ---
 
-Se quiser, eu posso também:
+## ℹ️ Status do Serviço
 
-1. Gerar um arquivo de exemplo `.env.example` com as variáveis essenciais ✅
-2. Criar um pequeno playbook (scripts) para criar a rede, validar serviços e executar backups automaticamente ✅
+![Status](https://img.shields.io/badge/Status-Internal_Service-red?style=for-the-badge)
 
-Quer que eu adicione `.env.example` agora? 🔧
+---
+
+## 📄 Licença
+
+Uso interno — Zenndi
