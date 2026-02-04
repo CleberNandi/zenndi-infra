@@ -1,0 +1,23 @@
+services:
+  bastion:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: zenndi-bastion
+    hostname: bastion
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - USER_NAME=dev
+      - USER_PASSWORD=password # Senha simples apenas para teste local
+      - PASSWORD_ACCESS=no
+      - SUDO_ACCESS=false
+    volumes:
+      - ./bastion:/config
+    ports:
+      - "2222:2222"
+    networks:
+      - zenndi-network
+
+networks:
+  zenndi-network:
+    external: true

@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  # Monitora o próprio Prometheus
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 🔍 Scanner
+  - job_name: 'zenndi-scanner'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['zenndi-scanner-api:8000']
+
+  # 🔐 Auth
+  - job_name: 'zenndi-auth'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['zenndi-auth-api:8000']
+
+  # 📧 Mail
+  - job_name: 'zenndi-mail'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['zenndi-mail-api:8000']
+
+  # 🧠 Core
+  - job_name: 'zenndi-core'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['zenndi-core-api:8000']
